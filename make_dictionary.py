@@ -9,43 +9,47 @@ import lxml.etree as ET
 import unicodedata
 
 # namespace
-ns = "{http://www.mediawiki.org/xml/export-0.10/}" 
+ns = "{http://www.mediawiki.org/xml/export-0.10/}"
 
-# arguments setting 
+# arguments setting
+# lcode = sys.argv[1]
+# fname = "{}wiktionary-20161201-pages-articles-multistream.xml".format(lcode)
 lcode = sys.argv[1]
-fname = "{}wiktionary-20161201-pages-articles-multistream.xml".format(lcode)    
+fname = sys.argv[2]
+
 
 def _refine_pron(pron):
     """Refines pronunciation (string)"""
     # remove punctuations
-    pron = re.sub("[\u2000-\u206F.,·/#!$%\^&*;:{}=\-_`~()<>\[\]]", "", pron)
+    # pron = re.sub("[\u2000-\u206F.,·/#!$%\^&*;:{}=\-_`~()<>\[\]]", "", pron)
+    pron = re.sub("[\u2000-\u206F,·/#!$%\^&*;:{}=\-_`~()<>\[\]]", "", pron)
 
     # unicode normalization
     pron = unicodedata.normalize('NFD', pron)
-    
+
     # digraph normalization
     dict = {"ʣ":"dz", "ʤ":"dʒ", "ʦ":"ts", "ʧ":"tʃ"}
     for k, v in dict.items():
         pron = pron.replace(k, v)
-    
+
     # split into single phonemes
     ## stress symbols
     pron = re.sub("[ʼ']", "ˈ", pron)
     pron = re.sub("([ˈˌ])", r" \1", pron)
-    
+
     ## diacritics must combine with their preceding letters.
     pron = re.sub("([^\U00000300-\U0000036F\U000002B0-\U000002FF])", r' \1', pron)
 
     # squeeze spaces
     pron = re.sub("[ ]+", " ", pron)
-    
+
     return pron.strip()
 
 def _get_hw(elem):
     '''Returns a headword (string) from elem (element)'''
     try:
         hw = elem.find('./{}title'.format(ns)).text
-        
+
         # validity check
         if any(word in hw for word in [' ', ',', 'Wiktionary:']): # We will NOT cover multi-word headwords.
             return None
@@ -78,7 +82,7 @@ def _get_entry_block(text):
             if ltag in entry_block:
                 return entry_block
     return None
-        
+
 def _get_prons(elem):
     '''returns list of pronunciations from elem (element)'''
     try:
@@ -110,23 +114,24 @@ def _get_prons(elem):
 
 def build_corpus():
     # Create folder
-    if not os.path.exists('data/refined'): os.mkdir('data/refined')
-    
+    if not os.path.exists('data/refined'): os.makedirs('data/refined')
+
     # Start work
     results = []
     i = 1
-    for _, elem in ET.iterparse("data/raw/{}".format(fname), tag=ns+"page"):
+    # for _, elem in ET.iterparse("data/raw/{}".format(fname), tag=ns+"page"):
+    for _, elem in ET.iterparse(fname, tag=ns+"page"):
         hw = _get_hw(elem)
         prons = _get_prons(elem)
         if hw and prons:
             for pron in prons:
                 results.append((hw, pron))
-        
+
         elem.clear() # We need to save memory!
         if i % 1000 == 0: print(i)
         i += 1
-    
-    # Write to file    
+
+    # Write to file
     with codecs.open("data/refined/{}.csv".format(lcode), 'w', 'utf-8') as fout:
         fout.write("headword,pronunciation\n")
         results.sort(key=lambda x:x[0])
